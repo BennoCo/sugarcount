@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>SugarCount</title>
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -555,7 +555,91 @@
     }
     .btn-ghost:hover { border-color: var(--teal); color: var(--teal); }
 
-    /* Spinner */
+    /* ── Info Modal ────────────────────────────────────────────── */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-box {
+    background: var(--card);
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px 36px;
+    width: 100%;
+    max-width: 430px;
+    max-height: 88vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);   opacity: 1; }
+  }
+  .modal-handle {
+    width: 40px; height: 4px;
+    background: #ddd; border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal-title {
+    font-size: 1.15rem; font-weight: 800;
+    margin-bottom: 18px; color: var(--text);
+  }
+  .info-block {
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .info-block .ib-title {
+    font-size: 0.82rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--teal-dk); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .info-block .ib-text {
+    font-size: 0.87rem; line-height: 1.65; color: #3a3a3a;
+  }
+  .info-block .ib-text b { color: var(--text); }
+  .info-source {
+    font-size: 0.72rem; color: var(--muted);
+    margin-top: 8px; display: block;
+  }
+  .sugar-types {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; margin-top: 6px;
+  }
+  .sugar-type-box {
+    border-radius: 10px; padding: 10px 12px;
+    font-size: 0.8rem; line-height: 1.5;
+  }
+  .sugar-type-box.bad  { background: #fdecea; color: #7f1d1d; }
+  .sugar-type-box.good { background: #f0fdf4; color: #14532d; }
+  .sugar-type-box strong { display: block; font-size: 0.85rem; margin-bottom: 2px; }
+  .modal-close {
+    width: 100%; padding: 13px;
+    background: var(--teal); color: white;
+    border: none; border-radius: 12px;
+    font-size: 0.95rem; font-weight: 700;
+    cursor: pointer; margin-top: 16px;
+  }
+
+  /* Info button */
+  .info-btn {
+    background: none; border: none;
+    color: var(--muted); font-size: 1rem;
+    cursor: pointer; padding: 2px 6px;
+    border-radius: 50%;
+    line-height: 1;
+    vertical-align: middle;
+  }
+  .info-btn:hover { color: var(--teal); background: var(--teal-lt); }
+
+  /* Spinner */
     .spin {
       display: inline-block;
       width: 14px; height: 14px;
@@ -674,7 +758,7 @@
             <div class="ring-center">
               <div class="ring-icon">🍬</div>
               <div class="ring-val" id="ring-val">0</div>
-              <div class="ring-unit">g Zucker</div>
+              <div class="ring-unit">g Zucker <button class="info-btn" onclick="openInfoModal()" title="Mehr Infos">ⓘ</button></div>
               <div class="ring-sub" id="ring-sub">von 50 g</div>
             </div>
           </div>
@@ -758,7 +842,8 @@
       <!-- Scanner -->
       <div id="scan-section">
         <div class="scanner-wrap">
-          <div id="reader"></div>
+          <video id="scanner-video" autoplay muted playsinline
+            style="width:100%;display:block;border-radius:16px;"></video>
           <div class="scan-overlay" id="scan-overlay">
             <div class="scan-frame"></div>
             <span>Barcode scannen</span>
@@ -817,7 +902,7 @@
           </div>
           <div class="setting-row">
             <div>
-              <div class="sr-label">Tagesziel (g Zucker)</div>
+              <div class="sr-label">Tagesziel (g Zucker) <button class="info-btn" onclick="openInfoModal()" title="Mehr Infos">ⓘ</button></div>
               <div class="sr-hint">WHO-Empfehlung: 50 g / Tag</div>
             </div>
             <input type="number" id="limit-input" value="50" min="1" max="500"
@@ -889,9 +974,75 @@
     </button>
   </nav>
 
+
+<!-- Info Modal -->
+<div class="modal-backdrop" id="info-modal" onclick="closeInfoModal(event)">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🍬 Zucker – was steckt dahinter?</div>
+
+    <div class="info-block">
+      <div class="ib-title">📊 Woher kommt der Wert von 50 g/Tag?</div>
+      <div class="ib-text">
+        Die <b>Weltgesundheitsorganisation (WHO)</b> empfiehlt, dass <b>freie Zucker</b> maximal
+        <b>10 % der täglichen Energiezufuhr</b> ausmachen sollten – das entspricht bei einem
+        durchschnittlichen Erwachsenen rund <b>50 g pro Tag</b>.<br><br>
+        Für zusätzliche Gesundheitsvorteile empfiehlt die WHO sogar eine Reduktion auf
+        <b>unter 25 g / Tag (5 %)</b>.
+        <span class="info-source">Quelle: WHO – Guideline: Sugars intake for adults and children (2015)</span>
+      </div>
+    </div>
+
+    <div class="info-block">
+      <div class="ib-title">🔍 Was sind «freie Zucker»?</div>
+      <div class="ib-text">
+        Die App erfasst den Zuckergehalt wie er auf der Produktverpackung deklariert ist.
+        Dabei handelt es sich um <b>Gesamtzucker</b>, der folgende Arten umfasst:
+      </div>
+      <div class="sugar-types" style="margin-top:10px;">
+        <div class="sugar-type-box bad">
+          <strong>⚠️ Freie Zucker</strong>
+          Zugesetzter Zucker, Honig, Sirupe, Fruchtsäfte – diese zählen zur WHO-Empfehlung
+        </div>
+        <div class="sugar-type-box good">
+          <strong>✅ Natürliche Zucker</strong>
+          In ganzen Früchten, Gemüse & Milch – weniger kritisch, da mit Ballaststoffen gebunden
+        </div>
+      </div>
+      <div class="ib-text" style="margin-top:10px;">
+        <b>Tipp:</b> Bei verarbeiteten Produkten (Joghurt, Müsli, Getränke) ist der Zucker
+        meist «frei» und zählt voll zur Empfehlung. Bei einem Apfel oder Karotte ist es
+        natürlicher Zucker – weniger problematisch.
+      </div>
+    </div>
+
+    <div class="info-block">
+      <div class="ib-title">🇨🇭 Schweizer Kontext</div>
+      <div class="ib-text">
+        Das <b>Bundesamt für Lebensmittelsicherheit (BLV)</b> übernimmt die WHO-Empfehlung.
+        Laut Schweizerischer Ernährungsstudie konsumieren Erwachsene in der Schweiz
+        durchschnittlich <b>ca. 100–110 g Zucker pro Tag</b> – doppelt so viel wie empfohlen.
+        <span class="info-source">Quelle: BLV – menuCH Nationale Ernährungserhebung (2014–2015)</span>
+      </div>
+    </div>
+
+    <button class="modal-close" onclick="closeInfoModal()">Verstanden ✓</button>
+  </div>
+</div>
+
 </div><!-- /app -->
 
 <script>
+// ── Info Modal ─────────────────────────────────────────────────────────────
+function openInfoModal() {
+  document.getElementById('info-modal').classList.add('open');
+}
+function closeInfoModal(e) {
+  if (!e || e.target === document.getElementById('info-modal')) {
+    document.getElementById('info-modal').classList.remove('open');
+  }
+}
+
 // ── Constants & State ──────────────────────────────────────────────────────
 const CIRCUMFERENCE_MAIN = 2 * Math.PI * 78;  // ≈ 490
 const CIRCUMFERENCE_MINI = 2 * Math.PI * 25;  // ≈ 157
@@ -952,8 +1103,7 @@ function switchPage(page) {
   }
   if (page === 'profil') renderStats();
   if (page === 'erfassen' && currentMethod === 'scan') {
-    if (!html5QrCode) initScanner();
-    else if (!scanning) startScanner();
+    if (!scanning) initScanner();
   }
   if (page !== 'erfassen') stopScanner();
 }
@@ -1111,46 +1261,59 @@ function addEntry(entry) {
   renderWeek();
 }
 
-// ── Scanner ────────────────────────────────────────────────────────────────
+// ── Scanner (ZXing) ────────────────────────────────────────────────────────
+let zxingReader = null;
+let scanStream  = null;
+
 function initScanner() {
-  if (typeof Html5Qrcode === 'undefined') {
-    setScanStatus('error', '❌ Scanner-Bibliothek konnte nicht geladen werden. Bitte Seite neu laden.');
+  if (typeof ZXing === 'undefined') {
+    setScanStatus('error', '❌ Scanner-Bibliothek nicht geladen. Bitte Seite neu laden.');
     return;
   }
-  html5QrCode = new Html5Qrcode("reader");
   startScanner();
 }
 
-function startScanner() {
+async function startScanner() {
   if (scanning || currentMethod !== 'scan') return;
-  if (!html5QrCode) { initScanner(); return; }
+
   const overlay = document.getElementById('scan-overlay');
+  const video   = document.getElementById('scanner-video');
   overlay.classList.remove('hidden');
 
-  // Formate nur angeben wenn verfügbar (library-Version abhängig)
-  const config = { fps: 10, qrbox: { width: 260, height: 130 } };
-  if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
-    config.formatsToSupport = [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128,
-    ];
-  }
+  try {
+    // Kamera-Stream anfordern (Rückkamera bevorzugt)
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = scanStream;
+    await video.play();
+    overlay.classList.add('hidden');
+    scanning = true;
+    setScanStatus('info', '📷 Barcode vor die Kamera halten…');
 
-  html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {})
-    .then(() => {
-      scanning = true;
-      overlay.classList.add('hidden');
-      setScanStatus('info', '📷 Barcode vor die Kamera halten…');
-    })
-    .catch(err => setScanStatus('error', '⚠️ Kamera nicht verfügbar: ' + err));
+    // ZXing Reader starten
+    zxingReader = new ZXing.BrowserMultiFormatReader();
+    zxingReader.decodeFromStream(scanStream, video, (result, err) => {
+      if (result) {
+        onScanSuccess(result.getText());
+      }
+    });
+
+  } catch(err) {
+    overlay.classList.add('hidden');
+    setScanStatus('error', '⚠️ Kamera nicht verfügbar. Bitte Erlaubnis erteilen.');
+  }
 }
 
 function stopScanner() {
   if (!scanning) return;
-  html5QrCode.stop().then(() => { scanning = false; }).catch(() => {});
+  scanning = false;
+  try {
+    if (zxingReader) { zxingReader.reset(); zxingReader = null; }
+    if (scanStream)  { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+    const video = document.getElementById('scanner-video');
+    if (video) { video.srcObject = null; }
+  } catch(e) {}
 }
 
 async function onScanSuccess(barcode) {
@@ -1261,7 +1424,8 @@ function resetScanner() {
   scannedProduct = null;
   document.getElementById('product-result').style.display = 'none';
   setScanStatus('', '');
-  if (!scanning) startScanner();
+  stopScanner();
+  setTimeout(startScanner, 300);
 }
 
 function setScanStatus(type, msg) {
@@ -1279,8 +1443,7 @@ function switchMethod(method) {
   document.getElementById('manual-section').style.display  = method === 'manual' ? 'block' : 'none';
 
   if (method === 'scan') {
-    if (!html5QrCode) initScanner();
-    else if (!scanning) startScanner();
+    if (!scanning) initScanner();
   }
   if (method === 'manual') stopScanner();
 }
